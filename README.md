@@ -31,6 +31,10 @@ La grabación usa MediaRecorder; la inversión usa Web Audio API y revierte las 
 
 Usa audífonos o separa a los jugadores durante la primera grabación. Esta versión es para jugar por turnos en el mismo dispositivo; no incluye salas remotas. Necesita permiso de micrófono y un navegador compatible con MediaRecorder y Web Audio. Debe comprobarse la captura con micrófonos reales en los dispositivos de destino.
 
+## Modo online (desarrollo)
+
+El modo online se desarrolla en la rama `dev-online`, separada de `main`. Usa Vercel Preview para la interfaz, Render para el servicio de salas y PostgreSQL, y un bucket privado de Cloudflare R2 para audios temporales. El [Blueprint de Render](./render.yaml) crea el servicio y la base de datos de desarrollo. Antes de probar, completa la [guía de publicación y configuración](./docs/online-play/development-setup.md). No conectes Preview a credenciales o datos de producción.
+
 ## Subir a GitHub
 
 Extrae el ZIP y abre la carpeta voicegame en la terminal. Crea un repositorio vacío en GitHub y ejecuta:

@@ -5,6 +5,7 @@ import GameProgress from "./components/GameProgress.jsx";
 import HelpModal from "./components/HelpModal.jsx";
 import PlayerHandoff from "./components/PlayerHandoff.jsx";
 import VictoryScreen from "./components/VictoryScreen.jsx";
+import OnlineGame from "./components/OnlineGame.jsx";
 import {
   GameFooter,
   GameFooterNote,
@@ -15,6 +16,9 @@ import { useGameAudio } from "./hooks/useGameAudio.js";
 import { createRoot } from "react-dom/client";
 
 function App() {
+  const [onlineMode, setOnlineMode] = useState(() =>
+    window.location.hash.includes("room="),
+  );
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState("");
   const [hidden, setHidden] = useState(false);
@@ -50,37 +54,54 @@ function App() {
       <GameHeader onHelp={() => setHelp(true)} />
       <main>
         <GameIntro />
-        <div className="game-layout">
-          <GameProgress step={step} />
-          {step === 3 ? (
-            <VictoryScreen title={title} round={round} onPlayAgain={reset} />
-          ) : handoffToPlayer2 ? (
-            <PlayerHandoff onContinue={() => setHandoffToPlayer2(false)} />
+        <div className={`game-layout${onlineMode ? " online-layout" : ""}`}>
+          {onlineMode ? (
+            <OnlineGame onExit={() => setOnlineMode(false)} />
           ) : (
-            <GameCard
-              step={step}
-              title={title}
-              setTitle={setTitle}
-              hidden={hidden}
-              setHidden={setHidden}
-              round={round}
-              original={audio.original}
-              imitation={audio.imitation}
-              recording={audio.recording}
-              busy={audio.busy}
-              seconds={audio.seconds}
-              playing={audio.playing}
-              error={audio.error}
-              onPlay={audio.play}
-              onRecord={audio.record}
-              onDownload={audio.downloadResult}
-              onNext={next}
-              onReset={reset}
-              onWin={() => {
-                audio.stopAudio();
-                setStep(3);
-              }}
-            />
+            <>
+              <button
+                className="online-mode-button"
+                type="button"
+                onClick={() => setOnlineMode(true)}
+              >
+                Jugar en línea desde dos dispositivos
+              </button>
+              <GameProgress step={step} />
+              {step === 3 ? (
+                <VictoryScreen
+                  title={title}
+                  round={round}
+                  onPlayAgain={reset}
+                />
+              ) : handoffToPlayer2 ? (
+                <PlayerHandoff onContinue={() => setHandoffToPlayer2(false)} />
+              ) : (
+                <GameCard
+                  step={step}
+                  title={title}
+                  setTitle={setTitle}
+                  hidden={hidden}
+                  setHidden={setHidden}
+                  round={round}
+                  original={audio.original}
+                  imitation={audio.imitation}
+                  recording={audio.recording}
+                  busy={audio.busy}
+                  seconds={audio.seconds}
+                  playing={audio.playing}
+                  error={audio.error}
+                  onPlay={audio.play}
+                  onRecord={audio.record}
+                  onDownload={audio.downloadResult}
+                  onNext={next}
+                  onReset={reset}
+                  onWin={() => {
+                    audio.stopAudio();
+                    setStep(3);
+                  }}
+                />
+              )}
+            </>
           )}
         </div>
         <GameFooterNote />
