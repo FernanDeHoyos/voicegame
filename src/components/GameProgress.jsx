@@ -1,3 +1,4 @@
+import React from "react";
 import { Check } from "lucide-react";
 import { GAME_STEPS } from "../data/game.js";
 

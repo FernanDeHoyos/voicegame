@@ -1,3 +1,4 @@
+import React from "react";
 import { ArrowRight, AudioLines, X } from "lucide-react";
 
 export default function HelpModal({ onClose }) {

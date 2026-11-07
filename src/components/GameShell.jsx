@@ -1,3 +1,4 @@
+import React from "react";
 import { AudioLines, Headphones, HelpCircle, Mic } from "lucide-react";
 
 export function GameHeader({ onHelp }) {

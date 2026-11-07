@@ -1,3 +1,4 @@
+import React from "react";
 import { Pause, Play } from "lucide-react";
 
 export default function AudioPlayer({
