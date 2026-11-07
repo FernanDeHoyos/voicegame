@@ -29,8 +29,9 @@ export default function HelpModal({ onClose }) {
           </li>
           <li>
             <strong>Adivina.</strong> Invertimos esa imitación. Escuchen el
-            resultado y descubran la película. Si hace falta, activen la
-            reproducción lenta al 85 %.
+            resultado, también pueden oír la imitación tal como se grabó y
+            compararla con el original. Si hace falta, activen la reproducción
+            lenta al 85 %.
           </li>
         </ol>
         <p>

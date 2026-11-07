@@ -38,7 +38,9 @@ function ResultPanel({
   return (
     <>
       <div className="listen-box result">
-        <div className="mini-label">TU IMITACIÓN · AHORA EN REVERSA</div>
+        <div className="mini-label">
+          TU IMITACIÓN · ESCÚCHALA EN AMBAS DIRECCIONES
+        </div>
         <AudioPlayer
           buffer={imitation}
           audioKey="result"
@@ -51,6 +53,13 @@ function ResultPanel({
         />
         <div className="comparison">
           <AudioPlayer
+            buffer={imitation}
+            audioKey="imitation"
+            isPlaying={playing === "imitation"}
+            onPlay={onPlay}
+            label="Escuchar la imitación sin invertir"
+          />
+          <AudioPlayer
             buffer={original}
             audioKey="original"
             isPlaying={playing === "original"}
@@ -58,6 +67,9 @@ function ResultPanel({
             label="Comparar con el original"
           />
         </div>
+        <p>
+          Compara la imitación al revés y tal como se grabó con la voz original.
+        </p>
       </div>
       <div className="guess">
         <label className="field-label" htmlFor="guess">
@@ -210,7 +222,7 @@ export default function GameCard({
               : "Sugiere una película al azar"}
           </button>
           <p className="movie-source">
-            Títulos de Wikidata · requiere conexión a internet
+            Títulos en español de Wikidata · requiere conexión a internet
           </p>
           {suggestionError && (
             <div role="alert" className="error">

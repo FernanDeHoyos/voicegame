@@ -2,16 +2,18 @@ import { expect } from "@playwright/test";
 
 export async function installAudioMocks(page) {
   await page.addInitScript(() => {
-    const createBuffer = () => ({
+    const createBuffer = (reversed = false) => ({
       numberOfChannels: 1,
       length: 44100,
       sampleRate: 44100,
       duration: 1,
+      reversed,
       getChannelData: () => new Float32Array(44100),
       copyToChannel: () => {},
     });
 
     window.__playbackRates = [];
+    window.__playbackDirections = [];
 
     class FakeAudioContext {
       constructor() {
@@ -25,7 +27,7 @@ export async function installAudioMocks(page) {
         return createBuffer();
       }
       createBuffer() {
-        return createBuffer();
+        return createBuffer(true);
       }
       createBufferSource() {
         const source = {
@@ -34,6 +36,9 @@ export async function installAudioMocks(page) {
           connect() {},
           start() {
             window.__playbackRates.push(this.playbackRate.value);
+            window.__playbackDirections.push(
+              this.buffer?.reversed ? "reversed" : "normal",
+            );
           },
           stop() {},
         };
