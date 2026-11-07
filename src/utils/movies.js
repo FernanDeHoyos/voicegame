@@ -1,10 +1,8 @@
 const ENDPOINT = "https://query.wikidata.org/sparql";
 const QUERY = `
   SELECT ?filmLabel WHERE {
-    ?film wdt:P31 wd:Q11424 .
-    SERVICE wikibase:label {
-      bd:serviceParam wikibase:language "es" .
-    }
+    ?film wdt:P31 wd:Q11424 ;
+      rdfs:label ?filmLabel .
     FILTER(LANG(?filmLabel) = "es")
   }
   LIMIT 50

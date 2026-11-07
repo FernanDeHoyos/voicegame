@@ -26,7 +26,7 @@ test("suggests only movie titles with Spanish labels", async ({ page }) => {
   await expect
     .poll(() => page.locator("#movie").inputValue())
     .toMatch(/^(La película de prueba|Una película en español)$/);
-  expect(sparqlQuery).toContain('wikibase:language "es"');
+  expect(sparqlQuery).toContain("rdfs:label ?filmLabel");
   expect(sparqlQuery).toContain('FILTER(LANG(?filmLabel) = "es")');
-  expect(sparqlQuery).not.toContain('"es,en"');
+  expect(sparqlQuery).not.toContain("SERVICE wikibase:label");
 });

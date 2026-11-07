@@ -28,6 +28,7 @@ function ResultPanel({
   const [guess, setGuess] = useState("");
   const [judged, setJudged] = useState(null);
   const [revealed, setRevealed] = useState(false);
+  const [originalAudioRevealed, setOriginalAudioRevealed] = useState(false);
 
   function checkGuess() {
     const correct = titlesMatch(guess, title);
@@ -38,38 +39,69 @@ function ResultPanel({
   return (
     <>
       <div className="listen-box result">
-        <div className="mini-label">
-          TU IMITACIÓN · ESCÚCHALA EN AMBAS DIRECCIONES
-        </div>
-        <AudioPlayer
-          buffer={imitation}
-          audioKey="result"
-          isPlaying={playing === "result"}
-          onPlay={onPlay}
-          reverse
-          playbackRate={slowPlayback ? 0.85 : 1}
-          onToggleSpeed={onToggleSlowPlayback}
-          label="Escuchar el resultado"
-        />
-        <div className="comparison">
-          <AudioPlayer
-            buffer={imitation}
-            audioKey="imitation"
-            isPlaying={playing === "imitation"}
-            onPlay={onPlay}
-            label="Escuchar la imitación sin invertir"
-          />
-          <AudioPlayer
-            buffer={original}
-            audioKey="original"
-            isPlaying={playing === "original"}
-            onPlay={onPlay}
-            label="Comparar con el original"
-          />
-        </div>
-        <p>
-          Compara la imitación al revés y tal como se grabó con la voz original.
+        <h3 className="audio-guide-title">Escuchen en este orden</h3>
+        <p className="audio-guide-intro">
+          Los dos primeros audios son la imitación de Jugador 2. El original
+          contiene el título secreto.
         </p>
+        <div className="audio-comparison">
+          <div className="audio-option">
+            <div className="audio-option-label">1 · IMITACIÓN INVERTIDA</div>
+            <p>La pista para adivinar · Jugador 2</p>
+            <AudioPlayer
+              buffer={imitation}
+              audioKey="result"
+              isPlaying={playing === "result"}
+              onPlay={onPlay}
+              reverse
+              playbackRate={slowPlayback ? 0.85 : 1}
+              onToggleSpeed={onToggleSlowPlayback}
+              label="Reproducir imitación invertida"
+            />
+          </div>
+          <div className="audio-option">
+            <div className="audio-option-label">2 · IMITACIÓN SIN INVERTIR</div>
+            <p>La grabación de Jugador 2 tal como se hizo</p>
+            <AudioPlayer
+              buffer={imitation}
+              audioKey="imitation"
+              isPlaying={playing === "imitation"}
+              onPlay={onPlay}
+              label="Reproducir imitación sin invertir"
+            />
+          </div>
+        </div>
+        <div className="original-audio">
+          <div className="original-audio-warning">
+            <div className="audio-option-label">
+              3 · SPOILER · AUDIO ORIGINAL DE JUGADOR 1
+            </div>
+            <p>
+              Este audio dice el título de la película. No lo reproduzcan hasta
+              terminar de adivinar.
+            </p>
+          </div>
+          {originalAudioRevealed ? (
+            <div id="original-audio-player">
+              <AudioPlayer
+                buffer={original}
+                audioKey="original"
+                isPlaying={playing === "original"}
+                onPlay={onPlay}
+                label="Reproducir original (contiene la respuesta)"
+              />
+            </div>
+          ) : (
+            <button
+              className="reveal-original"
+              type="button"
+              aria-expanded="false"
+              onClick={() => setOriginalAudioRevealed(true)}
+            >
+              Revelar audio original (dice el título)
+            </button>
+          )}
+        </div>
       </div>
       <div className="guess">
         <label className="field-label" htmlFor="guess">
