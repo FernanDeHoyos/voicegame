@@ -57,7 +57,7 @@ export function useGameAudio(step) {
     setPlaying("");
   }
 
-  async function play(buffer, key, reverse = false) {
+  async function play(buffer, key, reverse = false, playbackRate = 1) {
     if (playing === key) {
       stopAudio();
       return;
@@ -70,6 +70,7 @@ export function useGameAudio(step) {
       const source = context.createBufferSource();
 
       source.buffer = reverse ? reverseAudioBuffer(context, buffer) : buffer;
+      source.playbackRate.value = playbackRate;
       source.connect(context.destination);
       sourceRef.current = source;
       source.onended = () => {

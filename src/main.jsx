@@ -3,6 +3,8 @@ import "./style.css";
 import GameCard from "./components/GameCard.jsx";
 import GameProgress from "./components/GameProgress.jsx";
 import HelpModal from "./components/HelpModal.jsx";
+import PlayerHandoff from "./components/PlayerHandoff.jsx";
+import VictoryScreen from "./components/VictoryScreen.jsx";
 import {
   GameFooter,
   GameFooterNote,
@@ -17,21 +19,21 @@ function App() {
   const [title, setTitle] = useState("");
   const [hidden, setHidden] = useState(false);
   const [help, setHelp] = useState(false);
+  const [handoffToPlayer2, setHandoffToPlayer2] = useState(false);
   const [round, setRound] = useState(1);
   const audio = useGameAudio(step);
 
   function next() {
     audio.stopAudio();
     audio.setError("");
-    setStep((current) => current + 1);
-    setHidden(true);
-  }
-
-  function back() {
-    audio.stopAudio();
-    setStep(0);
-    setHidden(false);
-    audio.resetTimer();
+    if (step === 0) {
+      audio.resetTimer();
+      setStep(1);
+      setHidden(true);
+      setHandoffToPlayer2(true);
+      return;
+    }
+    setStep(2);
   }
 
   function reset() {
@@ -39,6 +41,7 @@ function App() {
     setStep(0);
     setTitle("");
     setHidden(false);
+    setHandoffToPlayer2(false);
     setRound((current) => current + 1);
   }
 
@@ -49,27 +52,36 @@ function App() {
         <GameIntro />
         <div className="game-layout">
           <GameProgress step={step} />
-          <GameCard
-            step={step}
-            title={title}
-            setTitle={setTitle}
-            hidden={hidden}
-            setHidden={setHidden}
-            round={round}
-            original={audio.original}
-            imitation={audio.imitation}
-            recording={audio.recording}
-            busy={audio.busy}
-            seconds={audio.seconds}
-            playing={audio.playing}
-            error={audio.error}
-            onPlay={audio.play}
-            onRecord={audio.record}
-            onDownload={audio.downloadResult}
-            onNext={next}
-            onBack={back}
-            onReset={reset}
-          />
+          {step === 3 ? (
+            <VictoryScreen title={title} round={round} onPlayAgain={reset} />
+          ) : handoffToPlayer2 ? (
+            <PlayerHandoff onContinue={() => setHandoffToPlayer2(false)} />
+          ) : (
+            <GameCard
+              step={step}
+              title={title}
+              setTitle={setTitle}
+              hidden={hidden}
+              setHidden={setHidden}
+              round={round}
+              original={audio.original}
+              imitation={audio.imitation}
+              recording={audio.recording}
+              busy={audio.busy}
+              seconds={audio.seconds}
+              playing={audio.playing}
+              error={audio.error}
+              onPlay={audio.play}
+              onRecord={audio.record}
+              onDownload={audio.downloadResult}
+              onNext={next}
+              onReset={reset}
+              onWin={() => {
+                audio.stopAudio();
+                setStep(3);
+              }}
+            />
+          )}
         </div>
         <GameFooterNote />
       </main>

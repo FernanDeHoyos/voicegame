@@ -29,7 +29,8 @@ export default function HelpModal({ onClose }) {
           </li>
           <li>
             <strong>Adivina.</strong> Invertimos esa imitación. Escuchen el
-            resultado y descubran la película.
+            resultado y descubran la película. Si hace falta, activen la
+            reproducción lenta al 85 %.
           </li>
         </ol>
         <p>

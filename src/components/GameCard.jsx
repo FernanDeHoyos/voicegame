@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  ArrowLeft,
   ArrowRight,
   Download,
   Eye,
@@ -10,8 +9,8 @@ import {
   Shuffle,
   Trophy,
 } from "lucide-react";
-import { MOVIES } from "../data/game.js";
 import { titlesMatch } from "../utils/game.js";
+import { fetchRandomMovieTitle } from "../utils/movies.js";
 import AudioPlayer from "./AudioPlayer.jsx";
 import RecordingPanel from "./RecordingPanel.jsx";
 
@@ -22,14 +21,18 @@ function ResultPanel({
   playing,
   onPlay,
   onDownload,
+  onWin,
+  slowPlayback,
+  onToggleSlowPlayback,
 }) {
   const [guess, setGuess] = useState("");
   const [judged, setJudged] = useState(null);
   const [revealed, setRevealed] = useState(false);
 
   function checkGuess() {
-    setJudged(titlesMatch(guess, title));
-    setRevealed(true);
+    const correct = titlesMatch(guess, title);
+    setJudged(correct);
+    if (correct) onWin();
   }
 
   return (
@@ -42,6 +45,8 @@ function ResultPanel({
           isPlaying={playing === "result"}
           onPlay={onPlay}
           reverse
+          playbackRate={slowPlayback ? 0.85 : 1}
+          onToggleSpeed={onToggleSlowPlayback}
           label="Escuchar el resultado"
         />
         <div className="comparison">
@@ -116,23 +121,43 @@ export default function GameCard({
   onPlay,
   onRecord,
   onNext,
-  onBack,
   onReset,
   onDownload,
+  onWin,
 }) {
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [suggestionError, setSuggestionError] = useState("");
+  const [slowPlayback, setSlowPlayback] = useState(false);
   const titleText =
     step === 0
-      ? "Todo empieza con una película."
+      ? "Jugador 1, prepara el reto."
       : step === 1
-        ? "¿Puedes imitar esta voz?"
-        : "Suena raro. ¿Te suena de algo?";
+        ? "Jugador 2, escucha e imita."
+        : "Ahora adivinen entre los dos.";
   const description =
     step === 0
-      ? "Piensa en un título. Que tu compañero no lo vea."
+      ? "Elige una película y graba su título sin que Jugador 2 lo vea."
       : step === 1
-        ? "Pasa el dispositivo. Escucha el reto e imita lo que oyes."
-        : "Tu imitación, al revés. Escuchen e intenten adivinar.";
+        ? "Escucha el audio invertido y graba tu mejor imitación."
+        : "Escuchen la imitación invertida e intenten adivinar la película.";
   const currentRecording = step === 0 ? original : imitation;
+
+  async function suggestMovie() {
+    setSuggestionLoading(true);
+    setSuggestionError("");
+
+    try {
+      setTitle(await fetchRandomMovieTitle());
+    } catch (error) {
+      setSuggestionError(
+        error instanceof Error
+          ? error.message
+          : "No pudimos obtener una película aleatoria. Inténtalo de nuevo.",
+      );
+    } finally {
+      setSuggestionLoading(false);
+    }
+  }
 
   return (
     <section className="game-card">
@@ -140,10 +165,10 @@ export default function GameCard({
         <span className="pill">
           <span />
           {step === 0
-            ? "EL DIRECTOR"
+            ? "JUGADOR 1 · EL DIRECTOR"
             : step === 1
-              ? "EL IMITADOR"
-              : "EL GRAN ESTRENO"}
+              ? "JUGADOR 2 · EL IMITADOR"
+              : "AMBOS JUGADORES · EL ESTRENO"}
         </span>
         <span className="round">RONDA {String(round).padStart(2, "0")}</span>
       </div>
@@ -163,9 +188,11 @@ export default function GameCard({
               value={title}
               placeholder="Ej. El rey león"
               maxLength={100}
+              disabled={suggestionLoading}
               onChange={(event) => setTitle(event.target.value)}
             />
             <button
+              disabled={suggestionLoading}
               onClick={() => setHidden(!hidden)}
               aria-label={hidden ? "Mostrar título" : "Ocultar título"}
             >
@@ -174,12 +201,22 @@ export default function GameCard({
           </div>
           <button
             className="shuffle"
-            onClick={() =>
-              setTitle(MOVIES[Math.floor(Math.random() * MOVIES.length)])
-            }
+            disabled={suggestionLoading}
+            onClick={suggestMovie}
           >
-            <Shuffle size={14} /> Sorpréndeme con una película
+            <Shuffle size={14} />
+            {suggestionLoading
+              ? "Buscando una película…"
+              : "Sugiere una película al azar"}
           </button>
+          <p className="movie-source">
+            Títulos de Wikidata · requiere conexión a internet
+          </p>
+          {suggestionError && (
+            <div role="alert" className="error">
+              {suggestionError}
+            </div>
+          )}
         </>
       ) : step === 1 ? (
         <div className="listen-box">
@@ -190,6 +227,8 @@ export default function GameCard({
             isPlaying={playing === "reverse"}
             onPlay={onPlay}
             reverse
+            playbackRate={slowPlayback ? 0.85 : 1}
+            onToggleSpeed={() => setSlowPlayback((slow) => !slow)}
             label="Escuchar el audio invertido"
           />
           <p>Puedes escucharlo tantas veces como quieras.</p>
@@ -202,6 +241,9 @@ export default function GameCard({
           playing={playing}
           onPlay={onPlay}
           onDownload={onDownload}
+          onWin={onWin}
+          slowPlayback={slowPlayback}
+          onToggleSlowPlayback={() => setSlowPlayback((slow) => !slow)}
         />
       )}
 
@@ -255,11 +297,6 @@ export default function GameCard({
 
       {step === 0 && original && !title.trim() && (
         <p className="hint">Escribe el título secreto para continuar.</p>
-      )}
-      {step === 1 && (
-        <button className="back" disabled={recording || busy} onClick={onBack}>
-          <ArrowLeft size={14} /> Volver al título
-        </button>
       )}
     </section>
   );

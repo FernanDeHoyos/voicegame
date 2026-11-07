@@ -24,7 +24,11 @@ export default function RecordingPanel({
     <>
       <div className={"recorder " + (recording ? "is-recording" : "")}>
         <div className="recorder-top">
-          <span>{step === 0 ? "GRABA EL TÍTULO" : "GRABA TU IMITACIÓN"}</span>
+          <span>
+            {step === 0
+              ? "JUGADOR 1 · GRABA EL TÍTULO"
+              : "JUGADOR 2 · GRABA SU IMITACIÓN"}
+          </span>
           <span>
             {recording ? (
               <>
