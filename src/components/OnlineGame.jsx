@@ -92,7 +92,16 @@ export default function OnlineGame({ onExit }) {
   const [transfer, setTransfer] = useState(null);
   const [audioLoading, setAudioLoading] = useState({});
 
-  const audio = useGameAudio(session?.role === 2 ? 1 : 0);
+  const challengeRole = room?.challengeRole ?? 1;
+  const imitationRole = 3 - challengeRole;
+  const isChallenger = session?.role === challengeRole;
+  const audio = useGameAudio(isChallenger ? 0 : 1);
+
+  useEffect(() => {
+    audio.resetAudio();
+    setTitle("");
+    setGuess("");
+  }, [room?.round, challengeRole]);
   const audioContextRef = useRef(null);
   const sourceRef = useRef(null);
   const loadedAudioRef = useRef({
@@ -357,7 +366,7 @@ export default function OnlineGame({ onExit }) {
   }
 
   async function submitRecording() {
-    const buffer = session?.role === 1 ? audio.original : audio.imitation;
+    const buffer = isChallenger ? audio.original : audio.imitation;
     if (!buffer || working) return;
 
     setWorking(true);
@@ -365,7 +374,7 @@ export default function OnlineGame({ onExit }) {
     setNotice("");
     setTransfer({ phase: "preparing", percent: null });
     try {
-      const audioType = session.role === 1 ? "challenge" : "imitation";
+      const audioType = isChallenger ? "challenge" : "imitation";
       const audioKey = await uploadRoomAudio(
         session,
         audioType,
@@ -374,7 +383,7 @@ export default function OnlineGame({ onExit }) {
       );
       setTransfer({ phase: "confirming", percent: null });
       const action =
-        session.role === 1
+        isChallenger
           ? { type: "submit-challenge", title, audioKey }
           : { type: "submit-imitation", audioKey };
       const nextRoom = await performRoomAction(session, {
@@ -493,16 +502,16 @@ export default function OnlineGame({ onExit }) {
   }
 
   const isMyTurn =
-    (room?.step === 0 && session?.role === 1) ||
-    (room?.step === 1 && session?.role === 2);
+    (room?.step === 0 && isChallenger) ||
+    (room?.step === 1 && !isChallenger);
   const challengeCanSubmit =
-    session?.role === 1 &&
+    isChallenger &&
     room?.status === "active" &&
     room?.step === 0 &&
     title.trim() &&
     audio.original;
   const imitationCanSubmit =
-    session?.role === 2 && room?.step === 1 && audio.imitation;
+    !isChallenger && room?.step === 1 && audio.imitation;
 
   if (screen === "connecting") {
     return (
@@ -654,6 +663,19 @@ export default function OnlineGame({ onExit }) {
       </div>
 
       {room?.step === 0 && session.role === 1 && (
+        <div className="online-starter">
+          <label className="field-label" htmlFor="online-starter">¿QUIÉN EMPIEZA ESTA RONDA?</label>
+          <select id="online-starter" value={challengeRole}
+            disabled={working || audio.recording || audio.busy}
+            onChange={(event) => sendAction({ type: "choose-starter", role: Number(event.target.value) })}>
+            <option value={1}>Jugador 1 · Anfitrión</option>
+            <option value={2}>Jugador 2 · Invitado</option>
+          </select>
+          <p>Quien empieza elige el título y graba el reto. El otro jugador lo imita.</p>
+        </div>
+      )}
+
+      {room?.step === 0 && isChallenger && (
         <>
           <h2>Prepara el reto</h2>
           <label className="field-label" htmlFor="online-title">
@@ -686,7 +708,7 @@ export default function OnlineGame({ onExit }) {
             }
             onClick={submitRecording}
           >
-            {working ? "Enviando audio…" : "Enviar reto a Jugador 2"}
+            {working ? "Enviando audio…" : `Enviar reto a Jugador ${imitationRole}`}
           </button>
           {transfer && (
             <AudioLoadingStatus
@@ -703,24 +725,24 @@ export default function OnlineGame({ onExit }) {
         </>
       )}
 
-      {room?.step === 0 && session.role === 2 && (
+      {room?.step === 0 && !isChallenger && (
         <div className="online-wait">
           <h2>Esperando el reto</h2>
-          <p>Jugador 1 está preparando el título y grabando el audio.</p>
+          <p>Jugador {challengeRole} está preparando el título y grabando el audio.</p>
         </div>
       )}
 
-      {room?.step === 1 && session.role === 1 && (
+      {room?.step === 1 && isChallenger && (
         <div className="online-wait">
-          <h2>Turno de Jugador 2</h2>
+          <h2>Turno de Jugador {imitationRole}</h2>
           <p>
-            El reto está enviado. Espera a que Jugador 2 escuche e imite el
+            El reto está enviado. Espera a que Jugador {imitationRole} escuche e imite el
             audio.
           </p>
         </div>
       )}
 
-      {room?.step === 1 && session.role === 2 && (
+      {room?.step === 1 && !isChallenger && (
         <>
           <h2>Escucha e imita el reto</h2>
           <p className="card-desc">
@@ -784,12 +806,12 @@ export default function OnlineGame({ onExit }) {
         <>
           <h2>Adivinen la película</h2>
           <p className="card-desc">
-            Comparen las grabaciones. El original de Jugador 1 contiene la
+            Comparen las grabaciones. El original de Jugador {challengeRole} contiene la
             respuesta.
           </p>
           {imitationAudio ? (
             <div className="listen-box">
-              <h3 className="audio-guide-title">Imitación de Jugador 2</h3>
+              <h3 className="audio-guide-title">Imitación de Jugador {imitationRole}</h3>
               <AudioPlayer
                 buffer={imitationAudio}
                 audioKey="online-imitation-reversed"
@@ -846,7 +868,7 @@ export default function OnlineGame({ onExit }) {
           <div className="online-original-warning">
             <ShieldAlert size={18} />
             <div>
-              <strong>Original de Jugador 1 · contiene la respuesta</strong>
+              <strong>Original de Jugador {challengeRole} · contiene la respuesta</strong>
               <p>Reprodúzcanlo solo después de intentar adivinar.</p>
             </div>
             {!room.revealed && (
@@ -861,7 +883,7 @@ export default function OnlineGame({ onExit }) {
               audioKey="online-original"
               isPlaying={playing === "online-original"}
               onPlay={playBuffer}
-              label="Original de Jugador 1 (contiene la respuesta)"
+              label={`Original de Jugador ${challengeRole} (contiene la respuesta)`}
             />
           )}
           {room.revealed && !originalAudio && audioLoading.original && (

@@ -31,6 +31,11 @@ const uploadSchema = z.object({
 
 const actionSchema = z.discriminatedUnion("type", [
   z.object({
+    type: z.literal("choose-starter"),
+    role: z.union([z.literal(1), z.literal(2)]),
+    expectedVersion: z.number().int().nonnegative(),
+  }),
+  z.object({
     type: z.literal("submit-challenge"),
     title: z.string().trim().min(1).max(MAX_TITLE_LENGTH),
     audioKey: z.string().min(1).max(200),
@@ -287,15 +292,15 @@ export function createApp({
     const { audioType } = parsed.data;
     const { state } = req.room;
     const canUpload =
-      (audioType === "challenge" && req.role === 1 && state.step === 0) ||
-      (audioType === "imitation" && req.role === 2 && state.step === 1);
+      (audioType === "challenge" && req.role === (state.challengeRole ?? 1) && state.step === 0) ||
+      (audioType === "imitation" && req.role !== (state.challengeRole ?? 1) && state.step === 1);
     if (!canUpload) {
       return res
         .status(409)
         .json({ error: "No puedes subir un audio en esta etapa." });
     }
 
-    const owner = audioType === "challenge" ? "player-1" : "player-2";
+    const owner = `player-${req.role}`;
     const audioKey = createAudioKey(req.room.id, owner);
     try {
       const uploadUrl = await storage.createUploadUrl(audioKey);
@@ -315,12 +320,12 @@ export function createApp({
 
     if (req.params.audioType === "challenge") {
       audioKey = state.challengeKey;
-      allowed = Boolean(audioKey) && (req.role === 1 || state.step >= 1);
+      allowed = Boolean(audioKey) && (req.role === (state.challengeRole ?? 1) || state.step >= 1);
     } else if (req.params.audioType === "original") {
       audioKey = state.challengeKey;
       allowed =
         Boolean(audioKey) &&
-        (req.role === 1 || state.revealed || state.step === 3);
+        (req.role === (state.challengeRole ?? 1) || state.revealed || state.step === 3);
     } else if (req.params.audioType === "imitation") {
       audioKey = state.imitationKey;
       allowed = Boolean(audioKey) && state.step >= 2;
@@ -386,7 +391,7 @@ export function createApp({
     const keyToVerify = keysToVerify[action.type];
     if (keyToVerify) {
       const expectedRole =
-        action.type === "submit-challenge" ? "player-1" : "player-2";
+        `player-${req.role}`;
       if (!isAudioKeyForRole(keyToVerify, req.room.id, expectedRole)) {
         return res
           .status(400)

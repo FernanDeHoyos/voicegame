@@ -119,3 +119,35 @@ test("joins an online room from its invitation link", async ({ page }) => {
     page.getByText("Jugador 2 · Invitado", { exact: false }),
   ).toBeVisible();
 });
+
+
+test("host can select the guest to prepare the challenge", async ({ page }) => {
+  let state = {
+    roomId: "starter-room", role: 1, status: "active", step: 0,
+    round: 1, version: 0, challengeRole: 1, title: null,
+    participantsOnline: { player1: true, player2: true },
+  };
+  await page.route("http://localhost:8787/api/rooms**", async (route) => {
+    const request = route.request();
+    if (request.url().endsWith("/rooms") && request.method() === "POST") {
+      return route.fulfill({ status: 201, json: {
+        roomId: state.roomId, role: 1, invitationCode,
+        participantToken: "starter-token", room: state,
+      } });
+    }
+    if (request.url().endsWith("/actions")) {
+      expect(request.postDataJSON()).toEqual({ type: "choose-starter", role: 2, expectedVersion: 0 });
+      state = { ...state, challengeRole: 2, version: 1 };
+    }
+    return route.fulfill({ json: state });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Jugar en línea desde dos dispositivos" }).click();
+  await page.getByRole("button", { name: "Crear sala en línea" }).click();
+  await expect(page.getByRole("heading", { name: "Prepara el reto" })).toBeVisible();
+  await page.getByLabel("¿QUIÉN EMPIEZA ESTA RONDA?").selectOption("2");
+  await expect(page.getByRole("heading", { name: "Esperando el reto" })).toBeVisible();
+  await expect(page.getByLabel("TÍTULO SECRETO")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByLabel("¿QUIÉN EMPIEZA ESTA RONDA?")).toHaveValue("2");
+});

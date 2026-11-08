@@ -39,6 +39,7 @@ export function normalizeGuess(value) {
 
 export function createInitialGameState(round = 1) {
   return {
+    challengeRole: 1,
     step: 0,
     round,
     title: null,
@@ -66,6 +67,7 @@ export function isAudioKeyForRole(key, roomId, role) {
 export function toRoomView(room, role) {
   const { state } = room;
   const isHost = role === 1;
+  const challengeRole = state.challengeRole ?? 1;
   const canReveal = state.revealed || state.step === 3;
   const presenceCutoff = Date.now() - 12_000;
 
@@ -85,7 +87,8 @@ export function toRoomView(room, role) {
     expiresAt: room.expires_at,
     step: state.step,
     round: state.round,
-    title: isHost || canReveal ? state.title : null,
+    challengeRole,
+    title: role === challengeRole || canReveal ? state.title : null,
     revealed: canReveal,
     guess: state.guess,
     hasChallenge: Boolean(state.challengeKey),
@@ -95,9 +98,15 @@ export function toRoomView(room, role) {
 }
 
 export function assertActionAllowed(state, role, action) {
+  const challengeRole = state.challengeRole ?? 1;
   switch (action.type) {
+    case "choose-starter":
+      if (role !== 1 || state.step !== 0 || ![1, 2].includes(action.role)) {
+        throw new GameActionError("Solo el anfitrión puede elegir quién empieza antes de enviar el reto.", 409);
+      }
+      return { ...state, challengeRole: action.role, version: state.version + 1 };
     case "submit-challenge":
-      if (role !== 1 || state.step !== 0) {
+      if (role !== challengeRole || state.step !== 0) {
         throw new GameActionError(
           "No puedes enviar el reto en este turno.",
           409,
@@ -110,7 +119,7 @@ export function assertActionAllowed(state, role, action) {
       ) {
         throw new GameActionError("Escribe un título válido.", 400);
       }
-      if (!isAudioKeyForRole(action.audioKey, action.roomId, "player-1")) {
+      if (!isAudioKeyForRole(action.audioKey, action.roomId, `player-${challengeRole}`)) {
         throw new GameActionError("La grabación del reto no es válida.", 400);
       }
       return {
@@ -123,13 +132,13 @@ export function assertActionAllowed(state, role, action) {
       };
 
     case "submit-imitation":
-      if (role !== 2 || state.step !== 1) {
+      if (role === challengeRole || state.step !== 1) {
         throw new GameActionError(
-          "Solo Jugador 2 puede enviar la imitación en este turno.",
+          "Solo quien imita puede enviar la grabación en este turno.",
           409,
         );
       }
-      if (!isAudioKeyForRole(action.audioKey, action.roomId, "player-2")) {
+      if (!isAudioKeyForRole(action.audioKey, action.roomId, `player-${3 - challengeRole}`)) {
         throw new GameActionError(
           "La grabación de la imitación no es válida.",
           400,

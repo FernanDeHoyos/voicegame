@@ -35,6 +35,8 @@ Usa audífonos o separa a los jugadores durante la primera grabación. Esta vers
 
 El modo online se desarrolla en la rama `dev-online`, separada de `main`. Usa Vercel Preview para la interfaz, Render para el servicio de salas y PostgreSQL, y un bucket privado de Cloudflare R2 para audios temporales. El [Blueprint de Render](./render.yaml) crea el servicio y la base de datos de desarrollo. Antes de probar, completa la [guía de publicación y configuración](./docs/online-play/development-setup.md). No conectes Preview a credenciales o datos de producción.
 
+En cada ronda online, el anfitrión puede elegir quién empieza antes de enviar el reto. Quien empieza prepara el título y graba el reto; el otro jugador escucha e imita. La elección se sincroniza y se conserva al recargar.
+
 ## Subir a GitHub
 
 Extrae el ZIP y abre la carpeta voicegame en la terminal. Crea un repositorio vacío en GitHub y ejecuta:

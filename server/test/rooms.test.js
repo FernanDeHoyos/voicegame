@@ -191,3 +191,48 @@ test("rejects unauthorized actions and deletes room audio on close", async () =>
   });
   assert.equal(afterClose.status, 410);
 });
+
+
+test("guest can start while host imitates, with permissions preserved", async () => {
+  const { host, guest } = await createJoinedRoom();
+  const choose = (actor, role, version) => submitAction(host, actor, {
+    type: "choose-starter", role, expectedVersion: version,
+  });
+  assert.equal((await choose(guest, 2, 0)).status, 409);
+  const chosen = await choose(host, 2, 0);
+  assert.equal(chosen.status, 200);
+  assert.equal((await chosen.json()).challengeRole, 2);
+  assert.equal((await choose(host, 1, 0)).status, 409);
+  const upload = async (actor, audioType) => request(`/api/rooms/${host.roomId}/uploads`, {
+    method: "POST", token: actor.participantToken,
+    body: JSON.stringify({ audioType, contentLength: 1024 }),
+  });
+  assert.equal((await upload(host, "challenge")).status, 409);
+  const challenge = await upload(guest, "challenge");
+  assert.equal(challenge.status, 200);
+  const { audioKey } = await challenge.json();
+  const submitted = await submitAction(host, guest, {
+    type: "submit-challenge", title: "Titanic", audioKey, expectedVersion: 1,
+  });
+  assert.equal(submitted.status, 200);
+  const recovered = await request(`/api/rooms/${host.roomId}`, { token: host.participantToken });
+  const state = await recovered.json();
+  assert.equal(state.challengeRole, 2);
+  assert.equal(state.title, null);
+  assert.equal((await request(`/api/rooms/${host.roomId}/audio/original`, { token: host.participantToken })).status, 403);
+  assert.equal((await choose(host, 1, 2)).status, 409);
+  assert.equal((await upload(guest, "imitation")).status, 409);
+  const imitation = await upload(host, "imitation");
+  assert.equal(imitation.status, 200);
+  const imitated = await submitAction(host, host, {
+    type: "submit-imitation", audioKey: (await imitation.json()).audioKey, expectedVersion: 2,
+  });
+  assert.equal(imitated.status, 200);
+  assert.equal((await submitAction(host, host, {
+    type: "guess", value: "Titanic", expectedVersion: 3,
+  })).status, 200);
+  const next = await submitAction(host, host, { type: "new-round", expectedVersion: 4 });
+  assert.equal(next.status, 200);
+  assert.equal((await next.json()).round, 2);
+  assert.equal((await choose(host, 2, 0)).status, 200);
+});

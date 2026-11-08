@@ -1549,3 +1549,7 @@ footer {
     }
   }
 }
+
+.online-starter { margin: 20px 0; }
+.online-starter select { width: 100%; padding: 12px; border: 1px solid var(--border, #444); border-radius: 10px; background: #20242d; color: #fff; font: inherit; }
+.online-starter p { font-size: 13px; opacity: .75; }
