@@ -52,6 +52,24 @@ function updateRoomIfCurrent(setRoom, nextRoom) {
   });
 }
 
+function AudioLoadingStatus({ label, progress }) {
+  const percent = progress?.percent;
+  return (
+    <div className="online-audio-loading" role="status" aria-live="polite">
+      <RefreshCw size={15} className="online-loading-icon" />
+      <span>{label}</span>
+      {Number.isFinite(percent) && (
+        <span className="online-loading-percent">{percent}%</span>
+      )}
+      <progress
+        max="100"
+        value={Number.isFinite(percent) ? percent : undefined}
+        aria-label={label}
+      />
+    </div>
+  );
+}
+
 export default function OnlineGame({ onExit }) {
   const [invitationInput, setInvitationInput] = useState("");
   const [invitationCode, setInvitationCode] = useState(inviteCodeFromHash);
@@ -71,11 +89,17 @@ export default function OnlineGame({ onExit }) {
   const [imitationAudio, setImitationAudio] = useState(null);
   const [originalAudio, setOriginalAudio] = useState(null);
   const [playing, setPlaying] = useState("");
+  const [transfer, setTransfer] = useState(null);
+  const [audioLoading, setAudioLoading] = useState({});
 
   const audio = useGameAudio(session?.role === 2 ? 1 : 0);
   const audioContextRef = useRef(null);
   const sourceRef = useRef(null);
-  const loadedAudioRef = useRef({ challenge: false, imitation: false });
+  const loadedAudioRef = useRef({
+    challenge: false,
+    imitation: false,
+    original: false,
+  });
 
   useEffect(() => {
     const code = inviteCodeFromHash();
@@ -145,40 +169,82 @@ export default function OnlineGame({ onExit }) {
         )());
       const tasks = [];
 
+      const progressFor = (type) => (progress) =>
+        setAudioLoading((current) => ({ ...current, [type]: progress }));
+      const finishLoading = (type) =>
+        setAudioLoading((current) => {
+          const next = { ...current };
+          delete next[type];
+          return next;
+        });
+
       if (room.step >= 1 && !loadedAudioRef.current.challenge) {
         loadedAudioRef.current.challenge = true;
+        setAudioLoading((current) => ({
+          ...current,
+          challenge: { percent: null },
+        }));
         tasks.push(
-          loadRoomAudio(session, "challenge", context)
+          loadRoomAudio(
+            session,
+            "challenge",
+            context,
+            progressFor("challenge"),
+          )
             .then((buffer) => {
               if (active) setChallengeAudio(buffer);
             })
             .catch((loadError) => {
               loadedAudioRef.current.challenge = false;
               if (active) setError(loadError.message);
+            })
+            .finally(() => {
+              if (active) finishLoading("challenge");
             }),
         );
       }
       if (room.step >= 2 && !loadedAudioRef.current.imitation) {
         loadedAudioRef.current.imitation = true;
+        setAudioLoading((current) => ({
+          ...current,
+          imitation: { percent: null },
+        }));
         tasks.push(
-          loadRoomAudio(session, "imitation", context)
+          loadRoomAudio(
+            session,
+            "imitation",
+            context,
+            progressFor("imitation"),
+          )
             .then((buffer) => {
               if (active) setImitationAudio(buffer);
             })
             .catch((loadError) => {
               loadedAudioRef.current.imitation = false;
               if (active) setError(loadError.message);
+            })
+            .finally(() => {
+              if (active) finishLoading("imitation");
             }),
         );
       }
-      if (room.revealed && !originalAudio) {
+      if (room.revealed && !loadedAudioRef.current.original) {
+        loadedAudioRef.current.original = true;
+        setAudioLoading((current) => ({
+          ...current,
+          original: { percent: null },
+        }));
         tasks.push(
-          loadRoomAudio(session, "original", context)
+          loadRoomAudio(session, "original", context, progressFor("original"))
             .then((buffer) => {
               if (active) setOriginalAudio(buffer);
             })
             .catch((loadError) => {
+              loadedAudioRef.current.original = false;
               if (active) setError(loadError.message);
+            })
+            .finally(() => {
+              if (active) finishLoading("original");
             }),
         );
       }
@@ -194,10 +260,15 @@ export default function OnlineGame({ onExit }) {
   }, [session, room?.step, room?.revealed, originalAudio, screen]);
 
   useEffect(() => {
-    loadedAudioRef.current = { challenge: false, imitation: false };
+    loadedAudioRef.current = {
+      challenge: false,
+      imitation: false,
+      original: false,
+    };
     setChallengeAudio(null);
     setImitationAudio(null);
     setOriginalAudio(null);
+    setAudioLoading({});
   }, [room?.round]);
 
   useEffect(
@@ -291,9 +362,17 @@ export default function OnlineGame({ onExit }) {
 
     setWorking(true);
     setError("");
+    setNotice("");
+    setTransfer({ phase: "preparing", percent: null });
     try {
       const audioType = session.role === 1 ? "challenge" : "imitation";
-      const audioKey = await uploadRoomAudio(session, audioType, buffer);
+      const audioKey = await uploadRoomAudio(
+        session,
+        audioType,
+        buffer,
+        setTransfer,
+      );
+      setTransfer({ phase: "confirming", percent: null });
       const action =
         session.role === 1
           ? { type: "submit-challenge", title, audioKey }
@@ -308,6 +387,7 @@ export default function OnlineGame({ onExit }) {
       setError(submitError.message);
     } finally {
       setWorking(false);
+      setTransfer(null);
     }
   }
 
@@ -323,7 +403,10 @@ export default function OnlineGame({ onExit }) {
   }
 
   async function playBuffer(buffer, key, reverse = false, rate = 1) {
-    if (!buffer || !audioContextRef.current) return;
+    if (!buffer) {
+      setError("El audio todavía no está listo. Espera a que termine de cargar.");
+      return;
+    }
     if (playing === key) {
       sourceRef.current?.stop();
       sourceRef.current = null;
@@ -333,8 +416,15 @@ export default function OnlineGame({ onExit }) {
 
     sourceRef.current?.stop();
     try {
-      const context = audioContextRef.current;
-      if (context.state === "suspended") await context.resume();
+      const context =
+        audioContextRef.current ??
+        (audioContextRef.current = new (
+          window.AudioContext || window.webkitAudioContext
+        )());
+      if (context.state !== "running") await context.resume();
+      if (context.state !== "running") {
+        throw new Error("El audio del dispositivo está bloqueado.");
+      }
       const source = context.createBufferSource();
       source.buffer = reverse ? reverseAudioBuffer(context, buffer) : buffer;
       source.playbackRate.value = rate;
@@ -343,11 +433,19 @@ export default function OnlineGame({ onExit }) {
         sourceRef.current = null;
         setPlaying("");
       };
+      source.onerror = () => {
+        sourceRef.current = null;
+        setPlaying("");
+        setError("El dispositivo no pudo reproducir este audio.");
+      };
       sourceRef.current = source;
       source.start();
       setPlaying(key);
-    } catch {
-      setError("No pudimos reproducir este audio. Inténtalo de nuevo.");
+    } catch (playError) {
+      setError(
+        playError.message ||
+          "No pudimos reproducir este audio. Inténtalo de nuevo.",
+      );
     }
   }
 
@@ -590,6 +688,18 @@ export default function OnlineGame({ onExit }) {
           >
             {working ? "Enviando audio…" : "Enviar reto a Jugador 2"}
           </button>
+          {transfer && (
+            <AudioLoadingStatus
+              label={
+                transfer.phase === "preparing"
+                  ? "Preparando audio…"
+                  : transfer.phase === "uploading"
+                    ? "Subiendo audio…"
+                    : "Confirmando audio…"
+              }
+              progress={transfer}
+            />
+          )}
         </>
       )}
 
@@ -630,7 +740,10 @@ export default function OnlineGame({ onExit }) {
               />
             </div>
           ) : (
-            <p aria-live="polite">Cargando audio del reto…</p>
+            <AudioLoadingStatus
+              label="Cargando audio del reto…"
+              progress={audioLoading.challenge}
+            />
           )}
           <RecordingPanel
             step={1}
@@ -652,6 +765,18 @@ export default function OnlineGame({ onExit }) {
           >
             {working ? "Enviando audio…" : "Enviar imitación"}
           </button>
+          {transfer && (
+            <AudioLoadingStatus
+              label={
+                transfer.phase === "preparing"
+                  ? "Preparando audio…"
+                  : transfer.phase === "uploading"
+                    ? "Subiendo audio…"
+                    : "Confirmando audio…"
+              }
+              progress={transfer}
+            />
+          )}
         </>
       )}
 
@@ -684,7 +809,10 @@ export default function OnlineGame({ onExit }) {
               />
             </div>
           ) : (
-            <p aria-live="polite">Cargando imitación…</p>
+            <AudioLoadingStatus
+              label="Cargando imitación…"
+              progress={audioLoading.imitation}
+            />
           )}
           <div className="guess">
             <label className="field-label" htmlFor="online-guess">
@@ -734,6 +862,12 @@ export default function OnlineGame({ onExit }) {
               isPlaying={playing === "online-original"}
               onPlay={playBuffer}
               label="Original de Jugador 1 (contiene la respuesta)"
+            />
+          )}
+          {room.revealed && !originalAudio && audioLoading.original && (
+            <AudioLoadingStatus
+              label="Cargando audio original…"
+              progress={audioLoading.original}
             />
           )}
         </>

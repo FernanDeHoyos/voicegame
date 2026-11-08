@@ -15,11 +15,23 @@ export function reverseAudioBuffer(audioContext, buffer) {
   return reversed;
 }
 
-export function createWavBlob(buffer) {
-  const audioData = new ArrayBuffer(
-      44 + buffer.length * buffer.numberOfChannels * 2,
-    ),
-    view = new DataView(audioData);
+export function createWavBlob(
+  buffer,
+  { mono = false, sampleRate = buffer.sampleRate } = {},
+) {
+  const channelCount = mono ? 1 : buffer.numberOfChannels;
+  const targetSampleRate = Math.min(sampleRate, buffer.sampleRate);
+  const frameCount = Math.ceil(
+    (buffer.length * targetSampleRate) / buffer.sampleRate,
+  );
+  const channelData = Array.from({ length: buffer.numberOfChannels }, (_, i) =>
+    buffer.getChannelData(i),
+  );
+  const outputChannels = mono
+    ? [channelData]
+    : channelData.map((_, index) => [channelData[index]]);
+  const audioData = new ArrayBuffer(44 + frameCount * channelCount * 2);
+  const view = new DataView(audioData);
 
   const writeString = (offset, value) =>
     [...value].forEach((character, index) =>
@@ -31,20 +43,29 @@ export function createWavBlob(buffer) {
   writeString(8, "WAVEfmt ");
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
-  view.setUint16(22, buffer.numberOfChannels, true);
-  view.setUint32(24, buffer.sampleRate, true);
-  view.setUint32(28, buffer.sampleRate * buffer.numberOfChannels * 2, true);
-  view.setUint16(32, buffer.numberOfChannels * 2, true);
+  view.setUint16(22, channelCount, true);
+  view.setUint32(24, targetSampleRate, true);
+  view.setUint32(28, targetSampleRate * channelCount * 2, true);
+  view.setUint16(32, channelCount * 2, true);
   view.setUint16(34, 16, true);
   writeString(36, "data");
   view.setUint32(40, audioData.byteLength - 44, true);
 
-  for (let frame = 0, offset = 44; frame < buffer.length; frame++) {
-    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-      const sample = Math.max(
-        -1,
-        Math.min(1, buffer.getChannelData(channel)[frame]),
-      );
+  for (let frame = 0, offset = 44; frame < frameCount; frame++) {
+    const sourceFrame = (frame * buffer.sampleRate) / targetSampleRate;
+    const lowerFrame = Math.floor(sourceFrame);
+    const upperFrame = Math.min(lowerFrame + 1, buffer.length - 1);
+    const fraction = sourceFrame - lowerFrame;
+
+    for (let channel = 0; channel < channelCount; channel++) {
+      let sample = 0;
+      for (const samples of outputChannels[channel]) {
+        sample +=
+          (samples[lowerFrame] * (1 - fraction) +
+            samples[upperFrame] * fraction) /
+          outputChannels[channel].length;
+      }
+      sample = Math.max(-1, Math.min(1, sample));
       view.setInt16(offset, sample < 0 ? sample * 32768 : sample * 32767, true);
       offset += 2;
     }

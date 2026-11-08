@@ -107,8 +107,14 @@ export function closeRoom(session) {
   });
 }
 
-export async function uploadRoomAudio(session, audioType, buffer) {
-  const blob = createWavBlob(buffer);
+export async function uploadRoomAudio(
+  session,
+  audioType,
+  buffer,
+  onProgress = () => {},
+) {
+  const blob = createWavBlob(buffer, { mono: true, sampleRate: 24000 });
+  onProgress({ phase: "preparing", percent: null });
   const prepared = await request(
     `/rooms/${encodeURIComponent(session.roomId)}/uploads`,
     {
@@ -118,28 +124,48 @@ export async function uploadRoomAudio(session, audioType, buffer) {
     },
   );
 
-  let response;
-  try {
-    response = await fetch(prepared.uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": prepared.contentType },
-      body: blob,
-    });
-  } catch {
-    throw new Error(
-      "No se pudo subir el audio. Revisa tu conexión e inténtalo otra vez.",
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      "El almacenamiento rechazó el audio. Puedes intentar enviarlo otra vez.",
-    );
-  }
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", prepared.uploadUrl);
+    xhr.setRequestHeader("Content-Type", prepared.contentType);
+    xhr.upload.onprogress = (event) => {
+      onProgress({
+        phase: "uploading",
+        percent: event.lengthComputable
+          ? Math.round((event.loaded / event.total) * 100)
+          : null,
+      });
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(
+          new Error(
+            "El almacenamiento rechazó el audio. Puedes intentar enviarlo otra vez.",
+          ),
+        );
+      }
+    };
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          "No se pudo subir el audio. Revisa tu conexión e inténtalo otra vez.",
+        ),
+      );
+    xhr.onabort = () => reject(new Error("Se canceló el envío del audio."));
+    onProgress({ phase: "uploading", percent: 0 });
+    xhr.send(blob);
+  });
   return prepared.audioKey;
 }
 
-export async function loadRoomAudio(session, audioType, audioContext) {
+export async function loadRoomAudio(
+  session,
+  audioType,
+  audioContext,
+  onProgress = () => {},
+) {
   const { downloadUrl } = await request(
     `/rooms/${encodeURIComponent(session.roomId)}/audio/${audioType}`,
     { token: session.participantToken },
@@ -148,5 +174,31 @@ export async function loadRoomAudio(session, audioType, audioContext) {
   if (!response.ok) {
     throw new Error("No se pudo descargar el audio de la sala.");
   }
-  return audioContext.decodeAudioData(await response.arrayBuffer());
+  if (!response.body?.getReader) {
+    onProgress({ percent: null });
+    return audioContext.decodeAudioData(await response.arrayBuffer());
+  }
+
+  const reader = response.body.getReader();
+  const total = Number(response.headers.get("content-length")) || 0;
+  const chunks = [];
+  let loaded = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.byteLength;
+    onProgress({
+      percent: total ? Math.round((loaded / total) * 100) : null,
+    });
+  }
+
+  const bytes = new Uint8Array(loaded);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  onProgress({ percent: 100 });
+  return audioContext.decodeAudioData(bytes.buffer);
 }
